@@ -1,29 +1,80 @@
 import argparse
+import io
 import socket
+import sys
+
+from scapy.tools.UTscapy import compute_campaign_digests
 
 from utils import PacketHeader, compute_checksum
 
 
 def receiver(receiver_ip, receiver_port, window_size):
-    """TODO: Listen on socket and print received message to sys.stdout."""
+    msg_buffer = io.BytesIO()
+
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((receiver_ip, receiver_port))
-    while True:
-        # Receive packet; address includes both IP and port
+
+    packet_buffer = [bytes(0)] * window_size
+
+    started = False
+    while not started:
         pkt, address = s.recvfrom(2048)
+        header = PacketHeader(pkt[:16])
+        if header.type == 0 and header.seq_num == 0:
+            start_ack = PacketHeader(type=3, seq_num=1, length=0)
+            start_ack.checksum = compute_checksum(start_ack)
+            s.sendto(bytes(start_ack), address)
+            started = True
 
-        # Extract header and payload
-        pkt_header = PacketHeader(pkt[:16])
-        msg = pkt[16 : 16 + pkt_header.length]
+    expected_seq_num = 0
+    while True:
+        pkt, address = s.recvfrom(2048)
+        header = PacketHeader(pkt[:16])
+        msg = pkt[16: 16 + header.length]
+        checksum = header.checksum
+        header.checksum = 0
+        computed_checksum = compute_checksum(header / msg)
+        if checksum != computed_checksum:
+            continue
 
-        # Verity checksum
-        pkt_checksum = pkt_header.checksum
-        pkt_header.checksum = 0
-        computed_checksum = compute_checksum(pkt_header / msg)
-        if pkt_checksum != computed_checksum:
-            print("checksums not match")
-        print(msg)
+        if header.type == 2:
+            if header.seq_num < expected_seq_num:
+                ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
+                ack_pkt.checksum = compute_checksum(ack_pkt)
+                s.sendto(bytes(ack_pkt), address)
+            elif header.seq_num == expected_seq_num:
+                msg_buffer.write(bytes(msg))
+                expected_seq_num += 1
+                while packet_buffer[expected_seq_num] != bytes(0):
+                    msg_buffer.write(packet_buffer[expected_seq_num])
+                    packet_buffer[expected_seq_num] = bytes(0)
+                    expected_seq_num += 1
+                ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
+                ack_pkt.checksum = compute_checksum(ack_pkt)
+                s.sendto(bytes(ack_pkt), address)
+            else:
+                if header.seq_num < expected_seq_num + window_size:
+                    if packet_buffer[header.seq_num] == bytes(0):
+                        packet_buffer[header.seq_num] = msg
+                ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
+                ack_pkt.checksum = compute_checksum(ack_pkt)
+                s.sendto(bytes(ack_pkt), address)
 
+        elif header.type == 1:
+            if header.seq_num == expected_seq_num:
+                ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num + 1, length=0)
+                ack_pkt.checksum = compute_checksum(ack_pkt)
+                s.sendto(bytes(ack_pkt), address)
+
+                full_message = msg_buffer.getvalue()
+                sys.stdout.buffer.write(full_message)
+                sys.stdout.buffer.flush()
+                break
+            else:
+                ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
+                ack_pkt.checksum = compute_checksum(ack_pkt)
+                s.sendto(bytes(ack_pkt), address)
+    s.close()
 
 def main():
     parser = argparse.ArgumentParser()
