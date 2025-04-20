@@ -2,9 +2,6 @@ import argparse
 import io
 import socket
 import sys
-
-from scapy.tools.UTscapy import compute_campaign_digests
-
 from utils import PacketHeader, compute_checksum
 
 
@@ -61,20 +58,16 @@ def receiver(receiver_ip, receiver_port, window_size):
                 s.sendto(bytes(ack_pkt), address)
 
         elif header.type == 1:
-            if header.seq_num == expected_seq_num:
-                ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num + 1, length=0)
-                ack_pkt.checksum = compute_checksum(ack_pkt)
-                s.sendto(bytes(ack_pkt), address)
+            ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num + 1, length=0)
+            ack_pkt.checksum = compute_checksum(ack_pkt)
+            s.sendto(bytes(ack_pkt), address)
 
-                full_message = msg_buffer.getvalue()
-                sys.stdout.buffer.write(full_message)
-                sys.stdout.buffer.flush()
-                break
-            else:
-                ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
-                ack_pkt.checksum = compute_checksum(ack_pkt)
-                s.sendto(bytes(ack_pkt), address)
+            full_message = msg_buffer.getvalue()
+            sys.stdout.buffer.write(full_message)
+            sys.stdout.buffer.flush()
+            break
     s.close()
+
 
 def main():
     parser = argparse.ArgumentParser()
