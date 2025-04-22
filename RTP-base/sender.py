@@ -8,22 +8,19 @@ from utils import PacketHeader, compute_checksum
 def sender(receiver_ip, receiver_port, window_size):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    timeout = 0.5
-
     msg = sys.stdin.buffer.read()
 
-    # create packets with chunks the message
     chunk_size = 1456
     msg_chunks = [msg[i:i+chunk_size] for i in range(0, len(msg), chunk_size)]
     packets = [bytes(0)] * len(msg_chunks)
 
     start_acked = False
     while not start_acked:
-        end_pkt = PacketHeader(type=0, seq_num=0, length=0)
-        end_pkt.checksum = compute_checksum(end_pkt)
-        s.sendto(bytes(end_pkt), (receiver_ip, receiver_port))
+        start_pkt = PacketHeader(type=0, seq_num=0, length=0)
+        start_pkt.checksum = compute_checksum(start_pkt)
+        s.sendto(bytes(start_pkt), (receiver_ip, receiver_port))
         timer = time.perf_counter()
-        while time.perf_counter() - timer <= timeout:
+        while time.perf_counter() - timer <= 0.5:
             try:
                 ack, address = s.recvfrom(2048)
                 header = PacketHeader(ack[:16])
@@ -44,11 +41,8 @@ def sender(receiver_ip, receiver_port, window_size):
 
     start_index = 0
     expected_ack_num = 1
-    while start_index <= len(packets) - 1:
-        if start_index + window_size >= len(packets) + 1:
-            current_window = range(start_index, len(packets), 1)
-        else:
-            current_window = range(start_index, start_index + window_size, 1)
+    while start_index < len(packets):
+        current_window = range(start_index, min(start_index + window_size, len(packets)), 1)
 
         print(f"Sent window from: {start_index} to {current_window.stop - 1}")
         for index in current_window:
@@ -56,7 +50,7 @@ def sender(receiver_ip, receiver_port, window_size):
 
         print(f"Expecting ACK: {expected_ack_num}")
         timer = time.perf_counter()
-        while time.perf_counter() - timer <= timeout:
+        while time.perf_counter() - timer <= 0.5:
             try:
                 pkt, address = s.recvfrom(2048)
                 ack_pkt = PacketHeader(pkt[:16])
@@ -77,11 +71,11 @@ def sender(receiver_ip, receiver_port, window_size):
 
     end_acked = False
     while not end_acked:
-        end_pkt = PacketHeader(type=1, seq_num=len(packets), length=0)
-        end_pkt.checksum = compute_checksum(end_pkt)
-        s.sendto(bytes(end_pkt), (receiver_ip, receiver_port))
+        start_pkt = PacketHeader(type=1, seq_num=len(packets), length=0)
+        start_pkt.checksum = compute_checksum(start_pkt)
+        s.sendto(bytes(start_pkt), (receiver_ip, receiver_port))
         timer = time.perf_counter()
-        while time.perf_counter() - timer <= timeout:
+        while time.perf_counter() - timer <= 0.5:
             try:
                 ack, address = s.recvfrom(2048)
                 header = PacketHeader(ack[:16])

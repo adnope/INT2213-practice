@@ -34,7 +34,17 @@ def receiver(receiver_ip, receiver_port, window_size):
         if checksum != computed_checksum:
             continue
 
-        if header.type == 2:
+        if header.type == 1:
+            ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num + 1, length=0)
+            ack_pkt.checksum = compute_checksum(ack_pkt)
+            s.sendto(bytes(ack_pkt), address)
+
+            full_message = msg_buffer.getvalue()
+            sys.stdout.buffer.write(full_message)
+            sys.stdout.buffer.flush()
+            break
+
+        elif header.type == 2:
             if header.seq_num < expected_seq_num:
                 ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
                 ack_pkt.checksum = compute_checksum(ack_pkt)
@@ -49,23 +59,13 @@ def receiver(receiver_ip, receiver_port, window_size):
                 ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
                 ack_pkt.checksum = compute_checksum(ack_pkt)
                 s.sendto(bytes(ack_pkt), address)
-            else:
-                if header.seq_num < expected_seq_num + window_size:
-                    if packet_buffer[header.seq_num] == bytes(0):
-                        packet_buffer[header.seq_num] = msg
+            elif expected_seq_num < header.seq_num < expected_seq_num + window_size:
+                if packet_buffer[header.seq_num] == bytes(0):
+                    packet_buffer[header.seq_num] = msg
                 ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
                 ack_pkt.checksum = compute_checksum(ack_pkt)
                 s.sendto(bytes(ack_pkt), address)
 
-        elif header.type == 1:
-            ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num + 1, length=0)
-            ack_pkt.checksum = compute_checksum(ack_pkt)
-            s.sendto(bytes(ack_pkt), address)
-
-            full_message = msg_buffer.getvalue()
-            sys.stdout.buffer.write(full_message)
-            sys.stdout.buffer.flush()
-            break
     s.close()
 
 
