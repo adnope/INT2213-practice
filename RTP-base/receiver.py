@@ -11,7 +11,7 @@ def receiver(receiver_ip, receiver_port, window_size):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((receiver_ip, receiver_port))
 
-    packet_buffer = [bytes(0)] * window_size
+    packet_buffer = {}
 
     started = False
     while not started:
@@ -52,15 +52,15 @@ def receiver(receiver_ip, receiver_port, window_size):
             elif header.seq_num == expected_seq_num:
                 msg_buffer.write(bytes(msg))
                 expected_seq_num += 1
-                while packet_buffer[expected_seq_num] != bytes(0):
+                while expected_seq_num in packet_buffer:
                     msg_buffer.write(packet_buffer[expected_seq_num])
-                    packet_buffer[expected_seq_num] = bytes(0)
+                    packet_buffer.pop(expected_seq_num)
                     expected_seq_num += 1
                 ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
                 ack_pkt.checksum = compute_checksum(ack_pkt)
                 s.sendto(bytes(ack_pkt), address)
             elif expected_seq_num < header.seq_num < expected_seq_num + window_size:
-                if packet_buffer[header.seq_num] == bytes(0):
+                if header.seq_num not in packet_buffer:
                     packet_buffer[header.seq_num] = msg
                 ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
                 ack_pkt.checksum = compute_checksum(ack_pkt)
