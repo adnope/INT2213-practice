@@ -57,8 +57,8 @@ def sender(receiver_ip, receiver_port, window_size):
                 print(f"Packet received: seq_num: {ack_header.seq_num}, type: {ack_header.type}")
                 if ack_header.type == 3:
                     if expected_seq_num < ack_header.seq_num < current_window.stop + 1:
-                        start_index = ack_header.seq_num
-                        expected_seq_num = ack_header.seq_num + 1
+                        start_index = ack_header.seq_num + 1
+                        expected_seq_num = ack_header.seq_num + 2
                         print(f"Received higher ACK {ack_header.seq_num}, ignored previous packets")
                         break
                     elif ack_header.seq_num == expected_seq_num:

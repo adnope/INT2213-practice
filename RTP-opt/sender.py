@@ -24,8 +24,8 @@ def sender(receiver_ip, receiver_port, window_size):
         while time.perf_counter() - timer <= 0.5:
             try:
                 ack, address = s.recvfrom(2048)
-                header = PacketHeader(ack[:16])
-                if header.type == 3 and header.seq_num == 0:
+                ack_header = PacketHeader(ack[:16])
+                if ack_header.type == 3 and ack_header.seq_num == 0:
                     started = True
                     print("Connection started.")
                     break
@@ -34,7 +34,7 @@ def sender(receiver_ip, receiver_port, window_size):
 
     # Constructing packets list
     seq_num = 1
-    for index, msg_chunk in enumerate(msg_chunks):
+    for msg_chunk in msg_chunks:
         header = PacketHeader(type=2, seq_num=seq_num, length=len(msg_chunk))
         header.checksum = compute_checksum(header / msg_chunk)
         packets.append(bytes(header / msg_chunk))
@@ -60,10 +60,10 @@ def sender(receiver_ip, receiver_port, window_size):
         print(f"Expecting ACK: {start_index}")
         try:
             ack, address = s.recvfrom(2048)
-            header = PacketHeader(ack[:16])
-            if header.type == 3 and header.seq_num < len(packets):
-                print(f"Received ACK: {header.seq_num}")
-                acked_packets[header.seq_num] = True
+            ack_header = PacketHeader(ack[:16])
+            if ack_header.type == 3 and ack_header.seq_num < len(packets):
+                print(f"Received ACK: {ack_header.seq_num}")
+                acked_packets[ack_header.seq_num] = True
                 while start_index < len(packets) and acked_packets[start_index]:
                     start_index += 1
         except socket.timeout:

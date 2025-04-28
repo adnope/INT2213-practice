@@ -6,10 +6,10 @@ from utils import PacketHeader, compute_checksum
 
 
 def receiver(receiver_ip, receiver_port, window_size):
-    msg_buffer = io.BytesIO()
-
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((receiver_ip, receiver_port))
+
+    msg_buffer = io.BytesIO()
 
     packet_buffer = {}
 
@@ -49,6 +49,12 @@ def receiver(receiver_ip, receiver_port, window_size):
                 ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
                 ack_pkt.checksum = compute_checksum(ack_pkt)
                 s.sendto(bytes(ack_pkt), address)
+            elif expected_seq_num < header.seq_num < expected_seq_num + window_size:
+                if header.seq_num not in packet_buffer:
+                    packet_buffer[header.seq_num] = msg
+                ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
+                ack_pkt.checksum = compute_checksum(ack_pkt)
+                s.sendto(bytes(ack_pkt), address)
             elif header.seq_num == expected_seq_num:
                 msg_buffer.write(bytes(msg))
                 expected_seq_num += 1
@@ -59,12 +65,7 @@ def receiver(receiver_ip, receiver_port, window_size):
                 ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
                 ack_pkt.checksum = compute_checksum(ack_pkt)
                 s.sendto(bytes(ack_pkt), address)
-            elif expected_seq_num < header.seq_num < expected_seq_num + window_size:
-                if header.seq_num not in packet_buffer:
-                    packet_buffer[header.seq_num] = msg
-                ack_pkt = PacketHeader(type=3, seq_num=expected_seq_num, length=0)
-                ack_pkt.checksum = compute_checksum(ack_pkt)
-                s.sendto(bytes(ack_pkt), address)
+
 
     s.close()
 
